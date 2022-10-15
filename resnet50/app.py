@@ -2,13 +2,12 @@ import io
 import json
 
 from torchvision import models
-import torchvision.transforms as transforms
+#import torchvision.transforms as transforms
 from PIL import Image
 from flask import Flask, jsonify, request
 
 import requests
 
-from torchvision import models
 
 #function to transform image
 # def transform_image(image_bytes):
@@ -50,15 +49,24 @@ model = models.resnet50(pretrained=True)
 #     image_bytes = f.read()
 #     print(get_prediction(image_bytes=image_bytes))
 
+def prepare_image(image):
+    if image.mode != 'RGB':
+        image = image.convert("RGB")
+    Transform = transforms.Compose([
+        transforms.Resize(256),
+        transforms.CenterCrop(224),
+        transforms.ToTensor(),
+        transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+    ])
+    image = Transform(image)
+    return image.unsqueeze(0)
 
 app = Flask(__name__)
 
-@app.route('/')
-def hello_world():  # put application's code here
-    return 'Hello World!'
 
-@app.route('/model', methods=['GET','POST'])
-def modelto():
+
+@app.route('/resnet', methods=['GET','POST'])
+def model():
     if request.method == 'POST':
         # Read the image in PIL format
         image = flask.request.files["image"].read()
