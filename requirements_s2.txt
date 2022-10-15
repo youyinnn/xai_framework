@@ -16,3 +16,7 @@ psutil
 shap
 anchor-exp
 nbformat
+Flask >= 2.2
+mysql-connector-python
+Pillow
+numpy

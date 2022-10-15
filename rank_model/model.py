@@ -13,8 +13,8 @@ from . import ranker_helper
 bp = Blueprint('s2search', __name__, url_prefix='/s2search')
 
 
-@bp.route('/', methods=['POST'])
-def upload():
+@bp.route('/prediction', methods=['POST'])
+def prediction():
     if request.method == 'POST':
         body = request.get_json()
         query = body['query']

@@ -29,7 +29,7 @@ def insert_img(img_name, img_data, img_group):
 
 
 @bp.route('/', methods=['POST'])
-def upload():
+def upload_paper():
     if request.method == 'POST':
         files = request.files
         imgs = files.getlist('imgs')
