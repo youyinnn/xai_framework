@@ -18,11 +18,11 @@ cnx = mysql.connector.connect(
 )
 
 
-def insert_img(img_name, img_data, img_group):
+def insert_img(img_name, img_data, img_group, img_label):
     cursor = cnx.cursor()
     add_img = (
-        "INSERT INTO image_net_1000(img_name, img_data, img_group) VALUES (%s,%s,%s)")
-    data = (img_name, img_data, img_group)
+        "INSERT INTO image_net_1000(img_name, img_data, img_group, img_label) VALUES (%s,%s,%s,%s)")
+    data = (img_name, img_data, img_group, img_label)
     cursor.execute(add_img, data)
     cnx.commit()
     cursor.close()
@@ -33,13 +33,23 @@ def upload_paper():
     if request.method == 'POST':
         files = request.files
         imgs = files.getlist('imgs')
+        img_label_map = files.get('img_label_map')
 
+        line = img_label_map.readlines()
+        m = {}
+        for l in line:
+            l = l.decode("utf-8").strip().split(',')
+            m[l[1]] = l[-1]
+
+        img_group = request.form.get('img_group')
+        i = 0
         for img in imgs:
+            print(i)
             img_name = img.filename
             img_data = img.read()
             # img = np.array(Image.open(img))
-
-            insert_img(img_name, img_data, 'test')
+            insert_img(img_name, img_data, img_group, m[img_name])
+            i += 1
 
     return ""
 
@@ -56,33 +66,26 @@ def get_response_image(img_data):
 @bp.route('/', methods=['GET'])
 def list_img():
     l = []
-    scope = request.args['scope']
-    with_img_data = request.args['with_img_data'] == '1'
+    img_group = request.args.get('img_group')
+    if img_group == None:
+        return "plese provide img_group"
+    with_img_data = request.args.get('with_img_data') != None
     if request.method == 'GET':
         cursor = cnx.cursor()
-        if scope == 'all':
-            q = (
-                f"SELECT id, img_name, {' img_data,' if with_img_data else ''} img_group FROM image_net_1000")
-            cursor.execute(q)
-        else:
-            img_name_list = request.args['img_name_list']
-            # print(img_name_list)
-            img_name_list = [f'\'{x}\'' for x in json.loads(img_name_list)]
-            qs = ','.join(img_name_list)
-            q = (
-                f"SELECT id, img_name, {' img_data,' if with_img_data else ''} img_group FROM image_net_1000 WHERE img_name IN({qs})")
-            # print(q)
-            cursor.execute(q)
+        q = (
+            f"SELECT id, img_name, {' img_data,' if with_img_data else ''} img_group, img_label FROM image_net_1000 WHERE img_group = '{img_group}'")
+        # print(q)
+        cursor.execute(q)
         if with_img_data:
-            for (id, img_name, img_data, img_group) in cursor:
-                l.append((id, img_name, get_response_image(img_data), img_group,))
+            for (id, img_name, img_data, img_group, img_label) in cursor:
+                l.append((id, img_name, get_response_image(
+                    img_data), img_group, img_label))
                 # Image.open(io.BytesIO(img_data)).show()
         else:
-            for (id, img_name, img_group) in cursor:
-                l.append((id, img_name, img_group,))
+            for (id, img_name, img_group, img_label) in cursor:
+                l.append((id, img_name, img_group, img_label))
                 # Image.open(io.BytesIO(img_data)).show()
 
-        cnx.commit()
         cursor.close()
 
     return jsonify(l)

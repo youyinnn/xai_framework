@@ -1,5 +1,4 @@
 import os
-import json
 
 from flask import Flask
 
@@ -11,9 +10,12 @@ if not os.path.isdir(tmpdir):
 
 def create_app(test_config=None):
     # create and configure the app
-    app = Flask(__name__)
+    app = Flask(__name__, instance_relative_config=True)
+    app.config.from_mapping(
+        SECRET_KEY='dev',
+    )
 
-    from . import model
-    app.register_blueprint(model.bp)
+    from . import xai_cam
+    app.register_blueprint(xai_cam.bp)
 
     return app

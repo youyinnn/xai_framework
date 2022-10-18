@@ -2,6 +2,11 @@ import os
 
 from flask import Flask
 
+basedir = os.path.abspath(os.path.dirname(__file__))
+tmpdir = os.path.join(basedir, 'tmp')
+if not os.path.isdir(tmpdir):
+    os.mkdir(tmpdir)
+
 
 def create_app(test_config=None):
     # create and configure the app
@@ -10,8 +15,9 @@ def create_app(test_config=None):
         SECRET_KEY='dev',
     )
 
-    from . import db_imgnet1000, db_arxiv_cs
-    app.register_blueprint(db_imgnet1000.bp)
-    app.register_blueprint(db_arxiv_cs.bp)
+    from . import tb_image_net_1000, tb_arxiv_cs, tb_explanation
+    app.register_blueprint(tb_image_net_1000.bp)
+    app.register_blueprint(tb_arxiv_cs.bp)
+    app.register_blueprint(tb_explanation.bp)
 
     return app

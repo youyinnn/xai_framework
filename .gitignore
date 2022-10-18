@@ -6,3 +6,7 @@ __pycache__
 
 *.pt
 *.pth
+
+.DS_Store
+
+tmp

@@ -11,6 +11,7 @@ from flask import (
 import numpy as np
 
 basedir = os.path.abspath(os.path.dirname(__file__))
+tmpdir = os.path.join(basedir, 'tmp')
 
 # print(basedir)
 
@@ -66,7 +67,6 @@ def pred():
         return jsonify(rs)
 
     elif request.method == 'GET':
-        state_dict_file_path = os.path.join(
-            basedir, 'static', 'model.pt')
+        state_dict_file_path = os.path.join(tmpdir, 'model.pt')
         torch.save(model.state_dict(), state_dict_file_path)
         return send_file(state_dict_file_path, as_attachment=True)
