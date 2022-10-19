@@ -42,11 +42,17 @@ thread_holder = {}
 basedir = os.path.abspath(os.path.dirname(__file__))
 tmpdir = os.path.join(basedir, 'tmp')
 
+device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+
+print(device)
+
 
 class MyThread(threading.Thread):
-    def __init__(self, *args, **kwargs):
+    def __init__(self, run_func, run_func_args, *args, **kwargs):
         super(MyThread, self).__init__(*args, **kwargs)
         self._stop = threading.Event()
+        self.run_func = run_func
+        self.run_func_args = run_func_args
 
     # function using _stop function
     def stop(self):
@@ -56,74 +62,61 @@ class MyThread(threading.Thread):
         return self._stop.isSet()
 
     def run(self):
-        while True:
-            if self.stopped():
-                return
-            print("Hello, world!")
-            time.sleep(1)
+        if self.stopped():
+            return
+        self.run_func(**self.run_func_args)
 
 
-def create_cam_task():
-    t = MyThread()
-    t.start()
-    task_name = f'{time.time()}-{t.name.lower()}'
-    thread_holder[task_name] = t
+def cam_task(form_data, task_name):
+    print('# get image data')
+    response = requests.get(
+        form_data['db_service_url'], params={
+            'img_group': form_data['data_set_group_name'],
+            'with_img_data': 1,
+        })
+    # print(response)
+    img_data = json.loads(response.content.decode('utf-8'))
 
+    # for igd in img_data:
+    #     dcode = base64.b64decode(igd[2])
+    #     img = Image.open(io.BytesIO(dcode))
+    #     img.show()
 
-def bytes_to_pil_image(b):
-    return Image.open(io.BytesIO(base64.b64decode(b)))
+    print('# get model pt')
+    model_pt_path = os.path.join(tmpdir, f"{form_data['model_name']}.pth")
+    response = requests.get(
+        form_data['model_service_url'])
+    with open(model_pt_path, "wb") as f:
+        f.write(response.content)
 
+    # load model
 
-@bp.route('/', methods=['POST'])
-def upload_paper():
-    if request.method == "POST":
-        form_data = request.form
+    model = models.resnet50(weights=models.ResNet50_Weights.IMAGENET1K_V1)
+    model.eval()
+    model.to(device)
 
-        # get image data
+    model.load_state_dict(torch.load(model_pt_path))
 
-        response = requests.get(
-            form_data['db_service_url'], params={
-                'img_group': form_data['data_set_group_name'],
-                'with_img_data': 1,
-            })
-        # print(response)
-        img_data = json.loads(response.content.decode('utf-8'))
+    target_layers = [model.layer4]
 
-        # for igd in img_data:
-        #     dcode = base64.b64decode(igd[2])
-        #     img = Image.open(io.BytesIO(dcode))
+    def get_img_np(path):
+        d = cv2.imread(path, 1)[:, :, ::-1]
+        return np.float32(d) / 255
 
-        # get model pt
-        model_pt_path = os.path.join(tmpdir, f"{form_data['model_name']}.pth")
-        response = requests.get(
-            form_data['model_service_url'])
-        with open(model_pt_path, "wb") as f:
-            f.write(response.content)
+    preprocessing = T.Compose([
+        T.ToTensor(),
+        T.Normalize(mean=[0.485, 0.456, 0.406],
+                    std=[0.229, 0.224, 0.225])
+    ])
 
-        # load model
+    grayscale_cam = []
 
-        model = models.resnet50(weights=models.ResNet50_Weights.IMAGENET1K_V1)
-        model.eval()
-
-        model.load_state_dict(torch.load(model_pt_path))
-
-        target_layers = [model.layer4]
-
-        def get_img_np(path):
-            d = cv2.imread(path, 1)[:, :, ::-1]
-            return np.float32(d) / 255
-
-        preprocessing = T.Compose([
-            T.ToTensor(),
-            T.Normalize(mean=[0.485, 0.456, 0.406],
-                        std=[0.229, 0.224, 0.225])
-        ])
-
-        # input_tensor = preprocess_image(rgb_img,
-        #                                 mean=[0.485, 0.456, 0.406],
-        #                                 std=[0.229, 0.224, 0.225])
-
-        rgb_img = bytes_to_pil_image(img_data[0][2])
+    print("# cam gen")
+    i = 0
+    for imgd in img_data:
+        print(i, imgd[1])
+        i += 1
+        rgb_img = bytes_to_pil_image(imgd[2])
 
         input_tensor = torch.tensor(np.array([
             preprocessing(x).numpy()
@@ -138,17 +131,10 @@ def upload_paper():
 
         # AblationCAM and ScoreCAM have batched implementations.
         # You can override the internal batch size for faster computation.
-        grayscale_cam = cam(input_tensor=input_tensor,
-                            targets=None,
-                            aug_smooth=True,
-                            eigen_smooth=False)
-
-        # Here grayscale_cam has only one image in the batch
-        # grayscale_cam = grayscale_cam[0]
-        # cam_image = show_cam_on_image(np.float32(
-        # rgb_img) / 255, grayscale_cam[0], use_rgb=True)
-        # Image.fromarray(cam_image).show()
-        print(type(grayscale_cam))
+        grayscale_cam = [imgd[1], cam(input_tensor=input_tensor,
+                                      targets=None,
+                                      aug_smooth=True,
+                                      eigen_smooth=False)[0]]
 
         exp_output_path = os.path.join(tmpdir, 'exp.npz')
 
@@ -158,18 +144,37 @@ def upload_paper():
                    'method_name': form_data['method_name'],
                    'data_set_name': form_data['data_set_name'],
                    'data_set_group_name': form_data['data_set_group_name'],
-                   'task_name': form_data['task_name']}
+                   'task_name': task_name}
         files = [
             ('explanation', ('exp.npz',
-             open(exp_output_path, 'rb'), 'application/octet-stream'))
+                             open(exp_output_path, 'rb'), 'application/octet-stream'))
         ]
         headers = {}
 
         response = requests.request(
             "POST", form_data['explanation_db_service_url'], headers=headers, data=payload, files=files)
 
-        print(response.text)
+        print(i, response.text)
 
+    thread_holder[task_name].stop()
+
+
+def bytes_to_pil_image(b):
+    return Image.open(io.BytesIO(base64.b64decode(b))).convert(
+        'RGB')
+
+
+@bp.route('/', methods=['POST'])
+def upload_paper():
+    if request.method == "POST":
+        form_data = request.form
+        task_name = f"{time.time()}-{form_data['model_name'].lower()}-{form_data['method_name'].lower()}-{form_data['data_set_name'].lower()}-{form_data['data_set_group_name'].lower()}"
+        t = MyThread(cam_task, {
+            'task_name': task_name,
+            'form_data': form_data
+        })
+        t.start()
+        thread_holder[task_name] = t
     return "done"
 
 

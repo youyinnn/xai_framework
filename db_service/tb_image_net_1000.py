@@ -55,7 +55,8 @@ def upload_paper():
 
 
 def get_response_image(img_data):
-    pil_img = Image.open(io.BytesIO(img_data))  # reads the PIL image
+    pil_img = Image.open(io.BytesIO(img_data)).convert(
+        'RGB')  # reads the PIL image
     byte_arr = io.BytesIO()
     pil_img.save(byte_arr, format='PNG')  # convert the PIL image to byte array
     encoded_img = encodebytes(byte_arr.getvalue()).decode(
