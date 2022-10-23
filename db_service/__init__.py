@@ -18,6 +18,6 @@ def create_app(test_config=None):
     from . import tb_image_net_1000, tb_arxiv_cs, tb_explanation
     app.register_blueprint(tb_image_net_1000.bp)
     app.register_blueprint(tb_arxiv_cs.bp)
-    app.register_blueprint(tb_explanation.bp)
+    # app.register_blueprint(tb_explanation.bp)
 
     return app
