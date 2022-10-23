@@ -1,27 +1,4 @@
-import multiprocessing
-import asyncio
-import os
-import base64
-import time
-import threading
-from base64 import encodebytes
-import io
-import json
-from flask import (
-    Blueprint, request, jsonify, send_file
-)
-import numpy as np
-import requests
-import shutil
-
-from torchvision import models
-import torch.nn as nn
-import torch.cuda as cuda
-import torch
-import torchvision.transforms as T
-import cv2
-from PIL import Image
-
+from pytorch_grad_cam.utils.image import show_cam_on_image
 from pytorch_grad_cam import GradCAM, \
     HiResCAM, \
     ScoreCAM, \
@@ -33,13 +10,33 @@ from pytorch_grad_cam import GradCAM, \
     LayerCAM, \
     FullGrad, \
     GradCAMElementWise
+from PIL import Image
+import cv2
+import torchvision.transforms as T
+import torch
+import torch.cuda as cuda
+import torch.nn as nn
+from torchvision import models
+import shutil
+import requests
+import numpy as np
+from flask import (
+    Blueprint, request, jsonify, send_file
+)
+import json
+import io
+from base64 import encodebytes
+import time
+import base64
+import os
+from . import task_manager as tm
 
-
-from pytorch_grad_cam.utils.image import show_cam_on_image
+create_and_add_process = tm.create_and_add_process
+terminate_process = tm.terminate_process
+thread_holder_str = tm.thread_holder_str
 
 bp = Blueprint('pt_cam', __name__, url_prefix='/xai/pt_cam')
 
-process_holder = {}
 
 basedir = os.path.abspath(os.path.dirname(__file__))
 tmpdir = os.path.join(basedir, 'tmp')
@@ -139,43 +136,20 @@ def bytes_to_pil_image(b):
 def cam_func():
     if request.method == 'GET':
         task_name = request.args['task_name']
-        task_time, model_name, method_name, data_set_name, data_set_group_name = task_name.split(
-            '|')
-        print(task_time, model_name, method_name,
-              data_set_name, data_set_group_name)
 
         return send_file(os.path.join(tmpdir, f'{task_name}.zip'), as_attachment=True)
     if request.method == "POST":
         form_data = request.form
         task_name = f"{time.time()}|{form_data['model_name'].lower()}|{form_data['method_name'].lower()}|{form_data['data_set_name'].lower()}|{form_data['data_set_group_name'].lower()}"
-        process = multiprocessing.Process(
-            target=cam_task, args=(form_data, task_name))
+        process = create_and_add_process(task_name,
+                                         cam_task, (form_data, task_name))
         process.start()
-        process_holder[task_name] = {
-            'start_time': time.time(),
-            'process': process
-        }
         return jsonify({
             'task_name': task_name
         })
 
 
-def thread_holder_str():
-    rs = []
-    for tk in process_holder.keys():
-        status = 'Running' if process_holder[tk]['process'].is_alive(
-        ) else "Stoped"
-        # rs.append(f"({tk}, {status})")
-        rs.append({
-            'task_name': tk,
-            'status': status,
-            'formated_start_time': time.strftime("%m/%d/%Y, %H:%M:%S", time.localtime(process_holder[tk]['start_time'])),
-            'start_time': process_holder[tk]['start_time'],
-        })
-    return rs
-
-
-@bp.route('/task', methods=['GET', 'POST'])
+@ bp.route('/task', methods=['GET', 'POST'])
 def list_task():
     if request.method == 'GET':
         tl = thread_holder_str()
@@ -184,6 +158,6 @@ def list_task():
         act = request.args['act']
         if act == 'stop':
             task_name = request.args['task_name']
-            process_holder[task_name]['process'].terminate()
+            terminate_process(task_name)
             # print(thread_holder_str())
     return ""
