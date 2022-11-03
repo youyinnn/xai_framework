@@ -11,8 +11,8 @@ import numpy as np
 bp = Blueprint('arxiv_cs', __name__, url_prefix='/db/arxiv_cs')
 
 cnx = mysql.connector.connect(
-    host="xaifwdb.c0gj2xdlz1ck.us-east-2.rds.amazonaws.com",
-    user="root",
+    host="database-1.c0gj2xdlz1ck.us-east-2.rds.amazonaws.com",
+    user="xai",
     password="xaidb.2022",
     database="xaifw"
 )

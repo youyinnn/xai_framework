@@ -252,7 +252,7 @@ def stability():
         with open(pcd_save_path, 'rb') as f:
             rs = list(np.load(f))
 
-    return jsonify()
+    return jsonify(rs)
 
 
 @ bp.route('/task', methods=['GET', 'POST'])

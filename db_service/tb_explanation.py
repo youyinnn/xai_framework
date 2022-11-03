@@ -18,8 +18,8 @@ from db_service.tb_image_net_1000 import cnx, get_response_image
 bp = Blueprint('explanation', __name__, url_prefix='/db/explanation')
 
 cnx = mysql.connector.connect(
-    host="xaifwdb.c0gj2xdlz1ck.us-east-2.rds.amazonaws.com",
-    user="root",
+    host="database-1.c0gj2xdlz1ck.us-east-2.rds.amazonaws.com",
+    user="xai",
     password="xaidb.2022",
     database="xaifw"
 )
